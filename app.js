@@ -29,6 +29,25 @@ if (zoomSlider) {
   updateMangaWidth(zoomSlider.value);
 }
 
+const ocrEngineSelect = document.getElementById('ocr-engine');
+const apiKeyContainer = document.getElementById('api-key-container');
+
+if (ocrEngineSelect && apiKeyContainer) {
+  ocrEngineSelect.addEventListener('change', (e) => {
+    if (e.target.value === 'cloud') {
+      apiKeyContainer.classList.remove('hidden');
+    } else {
+      apiKeyContainer.classList.add('hidden');
+    }
+  });
+  
+  // Tự động chuyển sang Cloud khi chạy trên hosting tĩnh (không phải localhost)
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    ocrEngineSelect.value = 'cloud';
+    apiKeyContainer.classList.remove('hidden');
+  }
+}
+
 // Sidebar double click collapse
 const sidebar = document.getElementById('sidebar');
 if (sidebar) {
@@ -196,21 +215,58 @@ async function translatePage(canvas, pageNum) {
   
   const language = sourceLangSelect.value;
   const ocrLang = language === "KOREAN" ? "ko" : (language === "JAPANESE" ? "ja" : (language === "CHINESE" ? "ch" : "en"));
+  const ocrEngine = ocrEngineSelect ? ocrEngineSelect.value : 'local';
 
   try {
-    const response = await fetch("/api/ocr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: base64Image, lang: ocrLang })
-    });
+    let textLines = [];
     
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(errText || "OCR server error");
+    if (ocrEngine === 'local') {
+      const response = await fetch("/api/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64Image, lang: ocrLang })
+      });
+      
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || "OCR server error");
+      }
+      
+      const data = await response.json();
+      textLines = data.Lines || [];
+    } else {
+      // Cloud OCR.space API
+      const apiKey = apiKeyInput.value || "helloworld";
+      const formData = new FormData();
+      formData.append("apikey", apiKey);
+      formData.append("base64Image", base64Image);
+      const ocrSpaceLang = ocrLang === "ko" ? "kor" : (ocrLang === "ja" ? "jpn" : (ocrLang === "ch" ? "chs" : "eng"));
+      formData.append("language", ocrSpaceLang);
+      formData.append("isOverlayRequired", "true");
+      
+      const response = await fetch("https://api.ocr.space/parse/image", {
+        method: "POST",
+        body: formData
+      });
+      
+      const data = await response.json();
+      if (data.OCRExitCode === 1 && data.ParsedResults && data.ParsedResults.length > 0) {
+        const lines = data.ParsedResults[0].TextOverlay ? data.ParsedResults[0].TextOverlay.Lines : [];
+        textLines = lines.map(l => ({
+          LineText: l.LineText,
+          Words: l.Words.map(w => ({
+            Left: w.Left,
+            Top: w.Top,
+            Width: w.Width,
+            Height: w.Height
+          }))
+        }));
+      } else {
+        const errorMsg = data.ErrorMessage ? data.ErrorMessage[0] : "OCR Cloud Error";
+        throw new Error(errorMsg);
+      }
     }
     
-    const data = await response.json();
-    const textLines = data.Lines || [];
     const validLines = textLines.filter(l => l.LineText && l.Words && l.Words.length > 0);
 
     if (validLines.length > 0) {
@@ -246,7 +302,7 @@ async function translatePage(canvas, pageNum) {
     }
   } catch (err) {
     console.error(`Error processing page ${pageNum}:`, err);
-    updateProgress(Math.round((pageNum / totalPages) * 100), `⚠️ Lỗi dịch trang ${pageNum}`);
+    updateProgress(Math.round((pageNum / totalPages) * 100), `⚠️ Lỗi dịch trang ${pageNum}: ${err.message}`);
   }
   return canvas;
 }

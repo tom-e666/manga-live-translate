@@ -63,6 +63,14 @@
       </div>
 
       <div class="flex flex-col gap-1.5">
+        <label class="text-[10px] text-zinc-500 font-bold uppercase">Công cụ OCR</label>
+        <select id="ocr-engine" class="w-full bg-[#18181b] text-xs text-white px-2.5 py-2 rounded-lg border border-zinc-800 focus:outline-none focus:border-blue-500">
+          <option value="local" selected>Local EasyOCR (Chạy ẩn/Free)</option>
+          <option value="cloud">Cloud OCR.space (Cần API Key)</option>
+        </select>
+      </div>
+
+      <div id="api-key-container" class="flex flex-col gap-1.5 hidden">
         <div class="flex justify-between items-center">
           <label class="text-[10px] text-zinc-500 font-bold uppercase">OCR.space API Key</label>
           <a href="https://ocr.space/ocrapi/freekey" target="_blank" class="text-[9px] text-blue-400 hover:underline">Lấy Key free</a>
