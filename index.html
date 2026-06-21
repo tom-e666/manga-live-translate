@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manga Translator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    #reader-container::-webkit-scrollbar {
+      width: 8px;
+    }
+    #reader-container::-webkit-scrollbar-track {
+      background: #09090b;
+    }
+    #reader-container::-webkit-scrollbar-thumb {
+      background: #27272a;
+      border-radius: 4px;
+    }
+    #reader-container::-webkit-scrollbar-thumb:hover {
+      background: #3f3f46;
+    }
+    .manga-page-wrapper {
+      width: 100%;
+      max-width: var(--manga-width, 1000px);
+      margin: 0 auto;
+      position: relative;
+    }
+    .manga-page-wrapper canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+  </style>
+</head>
+<body class="bg-[#09090b] text-zinc-100 min-h-screen flex font-sans overflow-hidden select-none">
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="w-[260px] h-screen bg-[#121214] border-r border-zinc-800 flex flex-col justify-between shrink-0 z-50 p-4 transition-all duration-300">
+    <div class="flex flex-col gap-4 w-full">
+      <div class="flex items-center gap-2 border-b border-zinc-800 pb-3">
+        <span class="text-xl">📖</span>
+        <h1 class="text-sm font-bold text-blue-500 uppercase tracking-wider">Manga Translator</h1>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-[10px] text-zinc-500 font-bold uppercase">Ngôn ngữ nguồn</label>
+        <select id="source-lang" class="w-full bg-[#18181b] text-xs text-white px-2.5 py-2 rounded-lg border border-zinc-800 focus:outline-none focus:border-blue-500">
+          <option value="ENGLISH" selected>Tiếng Anh</option>
+          <option value="JAPANESE">Tiếng Nhật</option>
+          <option value="KOREAN">Tiếng Hàn</option>
+          <option value="CHINESE">Tiếng Trung</option>
+        </select>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-[10px] text-zinc-500 font-bold uppercase">Ngôn ngữ đích</label>
+        <select id="target-lang" class="w-full bg-[#18181b] text-xs text-white px-2.5 py-2 rounded-lg border border-zinc-800 focus:outline-none focus:border-blue-500">
+          <option value="vi" selected>Tiếng Việt</option>
+          <option value="en">Tiếng Anh</option>
+        </select>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <div class="flex justify-between items-center">
+          <label class="text-[10px] text-zinc-500 font-bold uppercase">OCR.space API Key</label>
+          <a href="https://ocr.space/ocrapi/freekey" target="_blank" class="text-[9px] text-blue-400 hover:underline">Lấy Key free</a>
+        </div>
+        <input type="text" id="api-key" value="helloworld" placeholder="Nhập API Key" class="w-full bg-[#18181b] text-xs text-white px-2.5 py-2 rounded-lg border border-zinc-800 focus:outline-none focus:border-blue-500">
+      </div>
+
+      <div class="flex flex-col gap-1.5 bg-[#18181b] p-2.5 rounded-lg border border-zinc-800">
+        <div class="flex justify-between items-center">
+          <label class="text-[10px] text-zinc-400 font-bold uppercase">Độ rộng truyện</label>
+          <span id="zoom-value" class="text-[10px] text-blue-400 font-semibold">1000px</span>
+        </div>
+        <input type="range" id="zoom-slider" min="500" max="1800" step="50" value="1000" class="w-full mt-1 accent-blue-500">
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <label class="text-[10px] text-zinc-500 font-bold uppercase">Nạp truyện raw</label>
+        <div id="drop-zone" class="border border-dashed border-zinc-800 hover:border-blue-500 rounded-lg p-4 text-center cursor-pointer bg-[#18181b] transition-colors flex flex-col items-center justify-center gap-1">
+          <span class="text-xl">🖼️</span>
+          <p class="text-[10px] text-zinc-400">Thả ảnh hoặc PDF vào đây</p>
+          <input type="file" id="file-input" accept="image/*, application/pdf" multiple class="hidden">
+        </div>
+      </div>
+
+      <button id="btn-start" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+        🚀 Bắt Đầu Dịch
+      </button>
+
+      <button id="btn-download" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold text-xs hidden">
+        📥 Tải PDF Đã Dịch
+      </button>
+    </div>
+
+    <div class="flex flex-col gap-2 border-t border-zinc-800 pt-3">
+      <div class="flex justify-between text-[10px] text-zinc-400">
+        <span id="status-text" class="truncate max-w-[150px]">Chưa có file</span>
+        <span id="progress-text">0/0 trang</span>
+      </div>
+      <div class="w-full bg-[#18181b] h-1.5 rounded-full overflow-hidden">
+        <div id="progress-bar" class="w-0 h-full bg-blue-500 transition-all duration-300"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Reader View -->
+  <main class="flex-1 h-screen flex flex-col overflow-hidden relative">
+    <div id="reader-container" class="flex-1 flex flex-col items-center overflow-y-auto bg-[#09090b] py-8 px-4 scroll-smooth">
+      <div class="text-zinc-500 my-auto text-center py-20 flex flex-col items-center gap-3">
+        <span class="text-3xl">📖</span>
+        <p class="text-xs">Trang truyện dịch sẽ hiển thị ở đây.</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
